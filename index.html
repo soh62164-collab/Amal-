@@ -27,6 +27,8 @@ h1{font-size:20px;margin:8px 0}
 .day.on.ok{background:var(--ok);color:#fff;border-color:var(--ok)}
 .day:disabled{cursor:default}
 .day.bad i s{background:#dc2626}
+.rem input[type=time]{flex:1 1 120px}.rem label{cursor:pointer}.rem p{margin:10px 0 0}
+#ban{border-color:var(--pr);cursor:pointer}
 .wavg{display:flex;justify-content:space-around;margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)}
 .wavg div{font-size:13px;color:var(--mut)}.wavg b{display:block;font-size:22px;color:var(--tx)}
 .day i{display:block;height:4px;margin:4px 6px 0;border-radius:2px;background:var(--bd);overflow:hidden}
@@ -56,6 +58,7 @@ h1{font-size:20px;margin:8px 0}
 <body>
 <div class="w">
   <h1>🌙 আমল ট্র্যাকার</h1>
+  <div class="card" id="ban" hidden></div>
   <div class="tabs"><button id="t-amal">দৈনিক আমল</button><button id="t-post">নামাজের পর আমল</button></div>
   <div class="nav"><button id="prev">‹ আগের সপ্তাহ</button><span id="wk" class="sub"></span><button id="next">পরের সপ্তাহ ›</button></div>
   <div class="strip" id="strip"></div>
@@ -68,6 +71,14 @@ h1{font-size:20px;margin:8px 0}
     <input id="at" class="n" type="number" min="1" value="1" placeholder="টার্গেট">
     <input id="au" class="n" placeholder="একক">
     <button id="ab">যোগ করুন</button>
+  </div>
+  <div class="row" style="margin-top:14px"><span class="sub">দৈনিক রিমাইন্ডার</span><button class="sm" id="rbt">🔔 রিমাইন্ডার</button></div>
+  <div class="card rem" id="rbox" hidden>
+    <label class="row"><span>রিমাইন্ডার চালু</span><input type="checkbox" id="ron"></label>
+    <div class="add" style="margin-top:10px"><input type="time" id="rt" value="21:00"><button id="rad">সময় যোগ করুন</button></div>
+    <div id="rl"></div>
+    <button class="sm" id="rte" style="margin-top:8px">টেস্ট করুন</button>
+    <p class="sub">নোট: অ্যাপটি খোলা থাকলে বা ফোনের ব্যাকগ্রাউন্ডে চালু থাকলে নির্ধারিত সময়ে নোটিফিকেশন আসবে। অ্যাপ পুরোপুরি বন্ধ থাকলে ফোন এটি আসতে নাও দিতে পারে; তখন অ্যাপ খুললেই রিমাইন্ডার দেখাবে।</p>
   </div>
 </div>
 <script>
@@ -87,9 +98,9 @@ const $=id=>document.getElementById(id);
 const sec=()=>tab==="amal"?"amal":"post_"+waqt;
 const get=(d,s,id)=>((S.log[d]||{})[s]||{})[id]||0;
 function set(d,s,id,v){S.log[d]=S.log[d]||{};S.log[d][s]=S.log[d][s]||{};S.log[d][s][id]=Math.max(0,v);save();}
-function dayPct(d){
-  const secs=tab==="amal"?["amal"]:WAQT.map(w=>"post_"+w[0]);
-  const items=S[tab];if(!items.length)return 0;
+function dayPct(d,tb=tab){
+  const secs=tb==="amal"?["amal"]:WAQT.map(w=>"post_"+w[0]);
+  const items=S[tb];if(!items.length)return 0;
   let tot=0,n=0;
   secs.forEach(s=>items.forEach(i=>{tot+=Math.min(get(d,s,i.id),i.t)/i.t;n++}));
   return Math.round(tot/n*100);
@@ -118,6 +129,8 @@ function render(){
     <div class="ctl"><button data-m="${i.id}">−</button><span>${bn(c)}</span><button class="p" data-p="${i.id}">+</button></div></div>
     <div class="bar"><s style="width:${p}%"></s></div>
     ${edit?`<div class="row"><button class="sm" data-e="${i.id}">টার্গেট/নাম বদলান</button><button class="sm d" data-x="${i.id}">মুছুন</button></div>`:""}</div>`}).join(""):`<div class="emp">কোনো আমল নেই। "সম্পাদনা" চেপে নতুন আমল যোগ করুন।</div>`;
+  $("rbox").hidden=!ropen;$("ron").checked=!!S.rem.on;
+  $("rl").innerHTML=S.rem.times.map(t=>`<div class="row" style="margin:8px 0"><span>⏰ ${fmtT(t)}</span><button class="sm d" data-rx="${t}">মুছুন</button></div>`).join("");
   $("addbox").hidden=!edit;$("edt").textContent=edit?"✅ শেষ":"✏️ সম্পাদনা";
 }
 function esc(t){return String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
@@ -126,6 +139,10 @@ document.addEventListener("click",e=>{
   if(b.id==="t-amal"){tab="amal"}else if(b.id==="t-post"){tab="post"}
   else if(b.id==="prev"){off--}else if(b.id==="next"){if(off<0)off++}
   else if(b.id==="edt"){edit=!edit}
+  else if(b.id==="rbt"){ropen=!ropen}
+  else if(b.id==="rad"){const v=$("rt").value;if(v&&!S.rem.times.includes(v)){S.rem.times.push(v);S.rem.times.sort();save()}}
+  else if(D.rx){S.rem.times=S.rem.times.filter(t=>t!==D.rx);save()}
+  else if(b.id==="rte"){notify(pendText()||"আজকের সব আমল সম্পন্ন, মাশাআল্লাহ!")}
   else if(D.w){waqt=D.w}
   else if(D.p){set(sel,sec(),D.p,get(sel,sec(),D.p)+1)}
   else if(D.m){set(sel,sec(),D.m,get(sel,sec(),D.m)-1)}
@@ -136,7 +153,33 @@ document.addEventListener("click",e=>{
   else return;
   render();
 });
-render();
+let ropen=false;
+S.rem=S.rem||{on:false,times:[]};S.fd=S.fd||"";S.fired=S.fired||{};
+function fmtT(t){const[h,m]=t.split(":").map(Number);const p=h<4?"রাত":h<6?"ভোর":h<12?"সকাল":h<15?"দুপুর":h<17?"বিকাল":h<19?"সন্ধ্যা":"রাত";return p+" "+bn(h%12||12)+":"+bn(String(m).padStart(2,"0"))}
+function pendText(){const d=todayKey(),a=[];
+  [["amal","দৈনিক আমল"],["post","নামাজের পর আমল"]].forEach(([k,n])=>{if(S[k].length){const p=dayPct(d,k);if(p<100)a.push(n+" "+bn(p)+"%")}});
+  return a.length?"আজকের আমল বাকি আছে — "+a.join(", "):""}
+function notify(msg){
+  $("ban").hidden=false;$("ban").textContent="⏰ "+msg;
+  if(window.Notification&&Notification.permission==="granted"&&navigator.serviceWorker)
+    navigator.serviceWorker.ready.then(r=>r.showNotification("আমল ট্র্যাকার",{body:msg,icon:"icon-192.png",tag:"amal-remind"})).catch(()=>{});
+}
+function tick(){
+  if(!S.rem.on)return;
+  const now=new Date(),tk=key(now);
+  if(S.fd!==tk){S.fd=tk;S.fired={};save()}
+  const nm=now.getHours()*60+now.getMinutes();
+  S.rem.times.forEach(t=>{const[h,m]=t.split(":").map(Number),d=nm-(h*60+m);
+    if(d>=0&&d<=15&&!S.fired[t]){S.fired[t]=1;save();const x=pendText();if(x)notify(x)}});
+}
+$("ban").onclick=()=>{$("ban").hidden=true};
+$("ron").onchange=e=>{S.rem.on=e.target.checked;save();
+  if(S.rem.on&&window.Notification&&Notification.permission==="default")Notification.requestPermission();
+  else if(S.rem.on&&window.Notification&&Notification.permission==="denied")alert("নোটিফিকেশন বন্ধ আছে। ব্রাউজার/ফোনের সেটিংস থেকে অনুমতি দিন। তবু অ্যাপ খোলা থাকলে রিমাইন্ডার ব্যানার দেখাবে।");
+  tick()};
+setInterval(tick,20000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden){tick();render()}});
+render();tick();
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 </script>
 </body>
