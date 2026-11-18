@@ -22,6 +22,13 @@ h1{font-size:20px;margin:8px 0}
 .strip{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
 .day{border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:10px;padding:6px 0;font:inherit;font-size:12px;text-align:center}
 .day b{display:block;font-size:15px}
+.day.ok{background:rgba(22,163,74,.22);border-color:var(--ok)}
+.day.bad{background:rgba(220,38,38,.2);border-color:#dc2626}
+.day.on.ok{background:var(--ok);color:#fff;border-color:var(--ok)}
+.day:disabled{cursor:default}
+.day.bad i s{background:#dc2626}
+.wavg{display:flex;justify-content:space-around;margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)}
+.wavg div{font-size:13px;color:var(--mut)}.wavg b{display:block;font-size:22px;color:var(--tx)}
 .day i{display:block;height:4px;margin:4px 6px 0;border-radius:2px;background:var(--bd);overflow:hidden}
 .day i s{display:block;height:100%;background:var(--ok)}
 .chips{display:flex;gap:6px;overflow-x:auto;margin:10px 0}
@@ -73,6 +80,7 @@ let S;
 try{S=JSON.parse(localStorage.getItem("amalApp"))}catch(e){}
 S=S||{amal:[{id:uid(),n:"কুরআন তিলাওয়াত",t:2,u:"পৃষ্ঠা"},{id:uid(),n:"ইস্তিগফার",t:100,u:"বার"}],
  post:[{id:uid(),n:"সুবহানাল্লাহ",t:33,u:"বার"},{id:uid(),n:"আলহামদুলিল্লাহ",t:33,u:"বার"},{id:uid(),n:"আল্লাহু আকবার",t:34,u:"বার"}],log:{}};
+S.start=S.start||key(new Date());
 const save=()=>{try{localStorage.setItem("amalApp",JSON.stringify(S))}catch(e){}};
 let tab="amal",waqt="fajr",edit=false,off=0,sel=key(new Date());
 const $=id=>document.getElementById(id);
@@ -86,16 +94,23 @@ function dayPct(d){
   secs.forEach(s=>items.forEach(i=>{tot+=Math.min(get(d,s,i.id),i.t)/i.t;n++}));
   return Math.round(tot/n*100);
 }
-function weekStart(){const d=new Date();const diff=(d.getDay()+1)%7;d.setDate(d.getDate()-diff+off*7);d.setHours(0,0,0,0);return d}
+function weekStart(o=off){const d=new Date();const diff=(d.getDay()+1)%7;d.setDate(d.getDate()-diff+o*7);d.setHours(0,0,0,0);return d}
+const todayKey=()=>key(new Date());
+function weekAvg(o){const ws=weekStart(o),tk=todayKey();let t=0,n=0;
+  for(let i=0;i<7;i++){const d=new Date(ws);d.setDate(ws.getDate()+i);const k=key(d);if(k>=S.start&&k<=tk){t+=dayPct(k);n++}}
+  return n?Math.round(t/n):null}
+function status(k,tk){const p=dayPct(k);if(k===tk)return p>=100?"ok":"";if(k<tk&&k>=S.start)return p>=100?"ok":"bad";return""}
 function render(){
+  const tk=todayKey();sel=tk;
   $("t-amal").className=tab==="amal"?"on":"";$("t-post").className=tab==="post"?"on":"";
   const ws=weekStart();const days=[...Array(7)].map((_,i)=>{const d=new Date(ws);d.setDate(ws.getDate()+i);return d});
-  if(!days.some(d=>key(d)===sel))sel=key(days[0]);
   $("wk").textContent=bn(days[0].getDate())+"/"+bn(days[0].getMonth()+1)+" – "+bn(days[6].getDate())+"/"+bn(days[6].getMonth()+1);
-  $("strip").innerHTML=days.map(d=>{const k=key(d);return `<button class="day ${k===sel?"on":""}" data-d="${k}">${DAYS[d.getDay()]}<b>${bn(d.getDate())}</b><i><s style="width:${dayPct(k)}%"></s></i></button>`}).join("");
+  $("strip").innerHTML=days.map(d=>{const k=key(d);return `<button class="day ${k===tk?"on ":""}${status(k,tk)}" ${k===tk?"":"disabled"}>${DAYS[d.getDay()]}<b>${bn(d.getDate())}</b><i><s style="width:${dayPct(k)}%"></s></i></button>`}).join("");
   $("chips").hidden=tab!=="post";
   $("chips").innerHTML=WAQT.map(w=>`<button class="chip ${w[0]===waqt?"on":""}" data-w="${w[0]}">${w[1]}</button>`).join("");
-  $("sum").innerHTML=`আজকের অগ্রগতি: <b>${bn(dayPct(sel))}%</b>`+(tab==="post"?` <span class="sub">(পাঁচ ওয়াক্ত মিলিয়ে)</span>`:"");
+  const a=weekAvg(off),b=weekAvg(off-1),f=v=>v===null?"—":bn(v)+"%",tr=a!==null&&b!==null?(a>b?" ↑":a<b?" ↓":""):"";
+  $("sum").innerHTML=`আজকের অগ্রগতি: <b>${bn(dayPct(tk))}%</b>`+(tab==="post"?` <span class="sub">(পাঁচ ওয়াক্ত মিলিয়ে)</span>`:"")+
+  `<div class="wavg"><div>${off===0?"এই সপ্তাহের গড়":"এই সপ্তাহ (গড়)"}<b>${f(a)}${tr}</b></div><div>আগের সপ্তাহের গড়<b>${f(b)}</b></div></div>`;
   const s=sec(),items=S[tab];
   $("list").innerHTML=items.length?items.map(i=>{
     const c=get(sel,s,i.id),p=Math.min(100,Math.round(c/i.t*100));
@@ -109,9 +124,9 @@ function esc(t){return String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;","
 document.addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;const D=b.dataset;
   if(b.id==="t-amal"){tab="amal"}else if(b.id==="t-post"){tab="post"}
-  else if(b.id==="prev"){off--}else if(b.id==="next"){off++}
+  else if(b.id==="prev"){off--}else if(b.id==="next"){if(off<0)off++}
   else if(b.id==="edt"){edit=!edit}
-  else if(D.d){sel=D.d}else if(D.w){waqt=D.w}
+  else if(D.w){waqt=D.w}
   else if(D.p){set(sel,sec(),D.p,get(sel,sec(),D.p)+1)}
   else if(D.m){set(sel,sec(),D.m,get(sel,sec(),D.m)-1)}
   else if(D.x){if(confirm("এই আমলটি তালিকা থেকে বাদ দেবেন?"))S[tab]=S[tab].filter(i=>i.id!==D.x),save()}
